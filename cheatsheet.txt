@@ -1,8 +1,8 @@
 \documentclass{gmaccheatsheet}
 
 \begin{document}
-~\GMACHeader
-Latest Update: PolyMod - 27/10/25:19.12
+~\GMACHeader 
+Latest Update: XOR Basis - 21/02/26:11.45
 \section{Math}
 \begin{enumerate}[leftmargin=*]
 
@@ -391,6 +391,25 @@ struct bigint {
         return b < *this;
     }
 };
+
+\end{lstlisting}
+
+\item XOR Basis 
+\begin{lstlisting}
+typedef long long ll;
+
+vector<ll> basis(61, 0);
+
+void insertBasis(vector<ll> &basis, ll x) {
+    for (int b = 60; b >= 0 && x; --b) {
+        if (!(x & (1LL << b))) continue;
+        if (basis[b] == 0) {
+            basis[b] = x;
+            return;
+        }
+        x ^= basis[b];
+    }
+}
 
 \end{lstlisting}
 
@@ -1152,6 +1171,236 @@ int hopcroftKarp(vector<vi>& g, vi& btoa) {
 }
 \end{lstlisting}
 
+\item Maxflow Edmons-Karp
+
+\begin{lstlisting}
+/*
+    Complexity: O(VE^2)
+    Notes:
+    capacity is a matrix NxN
+    adj is an adjacency list
+*/
+
+int n;
+vector<vector<int>> capacity;
+vector<vector<int>> adj;
+
+int bfs(int s, int t, vector<int>& parent) {
+    fill(parent.begin(), parent.end(), -1);
+    parent[s] = -2;
+    queue<pair<int, int>> q;
+    q.push({s, INF});
+
+    while (!q.empty()) {
+        int cur = q.front().first;
+        int flow = q.front().second;
+        q.pop();
+
+        for (int next : adj[cur]) {
+            if (parent[next] == -1 && capacity[cur][next]) {
+                parent[next] = cur;
+                int new_flow = min(flow, capacity[cur][next]);
+                if (next == t)
+                    return new_flow;
+                q.push({next, new_flow});
+            }
+        }
+    }
+
+    return 0;
+}
+
+int maxflow(int s, int t) {
+    int flow = 0;
+    vector<int> parent(n);
+    int new_flow;
+
+    while (new_flow = bfs(s, t, parent)) {
+        flow += new_flow;
+        int cur = t;
+        while (cur != s) {
+            int prev = parent[cur];
+            capacity[prev][cur] -= new_flow;
+            capacity[cur][prev] += new_flow;
+            cur = prev;
+        }
+    }
+
+    return flow;
+}
+\end{lstlisting}
+
+\item Maxflow Dinic
+
+\begin{itemize}
+    \item Complexity: $O(V^2 E)$
+    \item Complexity on Unit Networks: $O(E \sqrt{V})$
+    
+    A unit network is a network in which for any vertex except $s$ and $t$ either incoming or outgoing edge is unique and has unit capacity.
+    \item Complexity on Unit Capacity: $O(EV^\frac{2}{3})$
+\end{itemize}
+
+\begin{lstlisting}
+struct FlowEdge {
+    int v, u;
+    long long cap, flow = 0;
+    FlowEdge(int v, int u, long long cap) : v(v), u(u), cap(cap) {}
+};
+
+struct Dinic {
+    const long long flow_inf = 1e18;
+    vector<FlowEdge> edges;
+    vector<vector<int>> adj;
+    int n, m = 0;
+    int s, t;
+    vector<int> level, ptr;
+    queue<int> q;
+
+    Dinic(int n, int s, int t) : n(n), s(s), t(t) {
+        adj.resize(n);
+        level.resize(n);
+        ptr.resize(n);
+    }
+
+    void add_edge(int v, int u, long long cap) {
+        edges.emplace_back(v, u, cap);
+        edges.emplace_back(u, v, 0);
+        adj[v].push_back(m);
+        adj[u].push_back(m + 1);
+        m += 2;
+    }
+
+    bool bfs() {
+        while (!q.empty()) {
+            int v = q.front();
+            q.pop();
+            for (int id : adj[v]) {
+                if (edges[id].cap == edges[id].flow)
+                    continue;
+                if (level[edges[id].u] != -1)
+                    continue;
+                level[edges[id].u] = level[v] + 1;
+                q.push(edges[id].u);
+            }
+        }
+        return level[t] != -1;
+    }
+
+    long long dfs(int v, long long pushed) {
+        if (pushed == 0)
+            return 0;
+        if (v == t)
+            return pushed;
+        for (int& cid = ptr[v]; cid < (int)adj[v].size(); cid++) {
+            int id = adj[v][cid];
+            int u = edges[id].u;
+            if (level[v] + 1 != level[u])
+                continue;
+            long long tr = dfs(u, min(pushed, edges[id].cap - edges[id].flow));
+            if (tr == 0)
+                continue;
+            edges[id].flow += tr;
+            edges[id ^ 1].flow -= tr;
+            return tr;
+        }
+        return 0;
+    }
+
+    long long flow() {
+        long long f = 0;
+        while (true) {
+            fill(level.begin(), level.end(), -1);
+            level[s] = 0;
+            q.push(s);
+            if (!bfs())
+                break;
+            fill(ptr.begin(), ptr.end(), 0);
+            while (long long pushed = dfs(s, flow_inf)) {
+                f += pushed;
+            }
+        }
+        return f;
+    }
+};
+\end{lstlisting}
+
+\item Maxflow Push-Relabel Method Improved
+
+Complexity: $O(VE + V^2\sqrt{E}) = O(V^3)$
+
+\begin{lstlisting}
+const int inf = 1000000000;
+
+int n;
+vector<vector<int>> capacity, flow;
+vector<int> height, excess;
+
+void push(int u, int v)
+{
+    int d = min(excess[u], capacity[u][v] - flow[u][v]);
+    flow[u][v] += d;
+    flow[v][u] -= d;
+    excess[u] -= d;
+    excess[v] += d;
+}
+
+void relabel(int u)
+{
+    int d = inf;
+    for (int i = 0; i < n; i++) {
+        if (capacity[u][i] - flow[u][i] > 0)
+            d = min(d, height[i]);
+    }
+    if (d < inf)
+        height[u] = d + 1;
+}
+
+vector<int> find_max_height_vertices(int s, int t) {
+    vector<int> max_height;
+    for (int i = 0; i < n; i++) {
+        if (i != s && i != t && excess[i] > 0) {
+            if (!max_height.empty() && height[i] > height[max_height[0]])
+                max_height.clear();
+            if (max_height.empty() || height[i] == height[max_height[0]])
+                max_height.push_back(i);
+        }
+    }
+    return max_height;
+}
+
+int max_flow(int s, int t)
+{
+    height.assign(n, 0);
+    height[s] = n;
+    flow.assign(n, vector<int>(n, 0));
+    excess.assign(n, 0);
+    excess[s] = inf;
+    for (int i = 0; i < n; i++) {
+        if (i != s)
+            push(s, i);
+    }
+
+    vector<int> current;
+    while (!(current = find_max_height_vertices(s, t)).empty()) {
+        for (int i : current) {
+            bool pushed = false;
+            for (int j = 0; j < n && excess[i]; j++) {
+                if (capacity[i][j] - flow[i][j] > 0 && height[i] == height[j] + 1) {
+                    push(i, j);
+                    pushed = true;
+                }
+            }
+            if (!pushed) {
+                relabel(i);
+                break;
+            }
+        }
+    }
+
+    return excess[t];
+}
+\end{lstlisting}
+
 \end{enumerate}
 
 \section{Data Structure}
@@ -1747,37 +1996,119 @@ int main(){
 \item Geometri Template
 
 \begin{lstlisting}
-struct titik {
-	double x, y;
+typedef long long ll;
+
+struct Point {
+    ll x, y;
 };
-double cross(titik a, titik b, titik c) {
-	// | i  j  k |
-	// | Ax Ay 0 |
-	// | Cx Cy 0 |
-	// = Ax . Cy - Ay . Cx
-	// >0 = cw
-	return (a.x - b.x)*(c.y - b.y) - (a.y - b.y)*(c.x - b.x);
-}
-bool in_segment(titik a, titik O, titik b) {
-	// Apakah O ada pada segmen ab
-	return cross(a, b, O) == 0
-		&& min(a.x, b.x) <= O.x && O.x <= max(a.x, b.x)
-		&& min(a.y, b.y) <= O.y && O.y <= max(a.y, b.y);
-}
-bool berpotongan(titik a, titik b, titik c, titik d) {
-	// Apakah segmen ab dan cd berpotongan
-	double abc = cross(a, b, c);
-	double abd = cross(a, b, d);
-	double cda = cross(c, d, a);
-	double cdb = cross(c, d, b);
-	if(abc * abd < 0 && cda * cdb < 0) return 1;
-	if(in_segment(a, c, b)) return 1;
-	if(in_segment(a, d, b)) return 1;
-	if(in_segment(c, a, d)) return 1;
-	if(in_segment(c, b, d)) return 1;
-	return 0;
+
+// Calculates the cross product of vectors BA and BC.
+// Returns > 0 if C is to the left of line AB (CCW).
+// Returns < 0 if C is to the right of line AB (CW).
+// Returns 0 if A, B, and C are collinear.
+ll cross_product(Point a, Point b, Point c) {
+    return (a.x - b.x) * (c.y - b.y) - (a.y - b.y) * (c.x - b.x);
 }
 
+// Checks if point P lies on the line segment defined by endpoints A and B.
+// It verifies collinearity first, then checks if P is within the bounding box of AB.
+bool on_segment(Point p, Point a, Point b) {
+    return cross_product(a, b, p) == 0 &&
+           p.x >= min(a.x, b.x) && p.x <= max(a.x, b.x) &&
+           p.y >= min(a.y, b.y) && p.y <= max(a.y, b.y);
+}
+
+// Helper function to return the sign of a number (-1, 0, or 1).
+// Prevents integer overflow that occurs when multiplying two large cross products.
+// if using double, use EPS = 1e-9 instead of 0
+int sign(ll X) {
+    return (X > 0) - (X < 0);
+}
+
+// Determines if line segment AB and line segment CD intersect.
+// Handles both "proper" intersections (crossing at a point) and 
+// "improper" intersections (endpoints touching or overlapping segments).
+bool intersect(Point a, Point b, Point c, Point d) {
+    ll abc = cross_product(a, b, c);
+    ll abd = cross_product(a, b, d);
+    ll cda = cross_product(c, d, a);
+    ll cdb = cross_product(c, d, b);
+
+    // If segments straddle each other, they must intersect.
+    if (sign(abc) * sign(abd) < 0 && sign(cda) * sign(cdb) < 0) {
+        return true;
+    }
+
+    // Check if any endpoint of one segment lies on the other segment.
+    if (on_segment(c, a, b)) return true;
+    if (on_segment(d, a, b)) return true;
+    if (on_segment(a, c, d)) return true;
+    if (on_segment(b, c, d)) return true;
+
+    return false;
+}
+
+\end{lstlisting}
+
+\item Geometry Template (With Complex)
+
+\begin{lstlisting}
+    
+typedef long long LL;
+#define x real()
+#define y imag()
+typedef complex<LL> Point;
+
+// Helper to get the cross product of vectors (B-A) and (C-A).
+// Returns the z-component of the 3D cross product.
+LL cross_product(Point a, Point b, Point c) {
+    return (conj(b - a) * (c - a)).y;
+}
+
+// Checks if point P lies on the line segment AB.
+// Returns true if P is collinear with AB and within the bounding box of A and B.
+bool on_segment(Point p, Point a, Point b) {
+    return cross_product(a, b, p) == 0 &&
+           p.x >= min(a.x, b.x) && p.x <= max(a.x, b.x) &&
+           p.y >= min(a.y, b.y) && p.y <= max(a.y, b.y);
+}
+
+// Returns the sign of LL x (-1, 0, or 1).
+// Essential to prevent overflow when multiplying cross products in intersection tests.
+int sign(LL x) {
+    return (x > 0) - (x < 0);
+}
+
+// Checks if line segments AB and CD intersect.
+// Covers proper intersections (crossing) and improper ones (touching/overlapping).
+bool intersect(Point a, Point b, Point c, Point d) {
+    LL abc = cross_product(a, b, c);
+    LL abd = cross_product(a, b, d);
+    LL cda = cross_product(c, d, a);
+    LL cdb = cross_product(c, d, b);
+
+    // General case: segments straddle each other's lines.
+    if (sign(abc) * sign(abd) < 0 && sign(cda) * sign(cdb) < 0) return true;
+
+    // Special cases: collinear points or endpoints touching.
+    if (on_segment(c, a, b)) return true;
+    if (on_segment(d, a, b)) return true;
+    if (on_segment(a, c, d)) return true;
+    if (on_segment(b, c, d)) return true;
+
+    return false;
+}
+
+// Calculates the area of a polygon with N vertices using the Shoelace Formula.
+// Note: Result is 2 * Area (to keep it as an integer). Divide by 2.0 at the end.
+LL polygon_area_2x(const vector<Point>& p) {
+    LL area = 0;
+    int n = p.size();
+    for (int i = 0; i < n; i++) {
+        area += (conj(p[i]) * p[(i + 1) % n]).y;
+    }
+    return abs(area);
+}
 \end{lstlisting}
 
 \item Convex Hull
@@ -1839,6 +2170,7 @@ void convex_hull(vector<pt> &a, bool include_collinear = false) {
     a.insert(a.end(), upper.begin(), upper.end());
 }
 \end{lstlisting}
+
 \end{enumerate}
 
 \section{Miscellaneous}
@@ -2451,150 +2783,6 @@ struct AhoCorasick {
 };
 \end{lstlisting}
 
-\item Maxflow Edmons-Karp
-
-\begin{lstlisting}
-/*
-    Notes:
-    capacity is a matrix NxN
-    adj is an adjacency list
-*/
-
-int n;
-vector<vector<int>> capacity;
-vector<vector<int>> adj;
-
-int bfs(int s, int t, vector<int>& parent) {
-    fill(parent.begin(), parent.end(), -1);
-    parent[s] = -2;
-    queue<pair<int, int>> q;
-    q.push({s, INF});
-
-    while (!q.empty()) {
-        int cur = q.front().first;
-        int flow = q.front().second;
-        q.pop();
-
-        for (int next : adj[cur]) {
-            if (parent[next] == -1 && capacity[cur][next]) {
-                parent[next] = cur;
-                int new_flow = min(flow, capacity[cur][next]);
-                if (next == t)
-                    return new_flow;
-                q.push({next, new_flow});
-            }
-        }
-    }
-
-    return 0;
-}
-
-int maxflow(int s, int t) {
-    int flow = 0;
-    vector<int> parent(n);
-    int new_flow;
-
-    while (new_flow = bfs(s, t, parent)) {
-        flow += new_flow;
-        int cur = t;
-        while (cur != s) {
-            int prev = parent[cur];
-            capacity[prev][cur] -= new_flow;
-            capacity[cur][prev] += new_flow;
-            cur = prev;
-        }
-    }
-
-    return flow;
-}
-\end{lstlisting}
-
-\item Maxflow Dinic
-
-\begin{lstlisting}
-struct FlowEdge {
-    int v, u;
-    long long cap, flow = 0;
-    FlowEdge(int v, int u, long long cap) : v(v), u(u), cap(cap) {}
-};
-
-struct Dinic {
-    const long long flow_inf = 1e18;
-    vector<FlowEdge> edges;
-    vector<vector<int>> adj;
-    int n, m = 0;
-    int s, t;
-    vector<int> level, ptr;
-    queue<int> q;
-
-    Dinic(int n, int s, int t) : n(n), s(s), t(t) {
-        adj.resize(n);
-        level.resize(n);
-        ptr.resize(n);
-    }
-
-    void add_edge(int v, int u, long long cap) {
-        edges.emplace_back(v, u, cap);
-        edges.emplace_back(u, v, 0);
-        adj[v].push_back(m);
-        adj[u].push_back(m + 1);
-        m += 2;
-    }
-
-    bool bfs() {
-        while (!q.empty()) {
-            int v = q.front();
-            q.pop();
-            for (int id : adj[v]) {
-                if (edges[id].cap == edges[id].flow)
-                    continue;
-                if (level[edges[id].u] != -1)
-                    continue;
-                level[edges[id].u] = level[v] + 1;
-                q.push(edges[id].u);
-            }
-        }
-        return level[t] != -1;
-    }
-
-    long long dfs(int v, long long pushed) {
-        if (pushed == 0)
-            return 0;
-        if (v == t)
-            return pushed;
-        for (int& cid = ptr[v]; cid < (int)adj[v].size(); cid++) {
-            int id = adj[v][cid];
-            int u = edges[id].u;
-            if (level[v] + 1 != level[u])
-                continue;
-            long long tr = dfs(u, min(pushed, edges[id].cap - edges[id].flow));
-            if (tr == 0)
-                continue;
-            edges[id].flow += tr;
-            edges[id ^ 1].flow -= tr;
-            return tr;
-        }
-        return 0;
-    }
-
-    long long flow() {
-        long long f = 0;
-        while (true) {
-            fill(level.begin(), level.end(), -1);
-            level[s] = 0;
-            q.push(s);
-            if (!bfs())
-                break;
-            fill(ptr.begin(), ptr.end(), 0);
-            while (long long pushed = dfs(s, flow_inf)) {
-                f += pushed;
-            }
-        }
-        return f;
-    }
-};
-\end{lstlisting}
-
 \end{enumerate}
 
 \section{Mod}
@@ -2719,7 +2907,7 @@ for (int i = 0; i < n; i++) {
 \end{lstlisting}
 
 \section{Abstract Algebra}
-\begin{enumerate}
+\begin{enumerate}[leftmargin=*]
     \item Todd-Coxeter Algorithm
     \begin{lstlisting}
         struct DSU {
@@ -2877,6 +3065,175 @@ struct Coset {
     a
 
     \end{lstlisting}
+\end{enumerate}
+
+\end{enumerate}
+
+\section{Regex}
+
+\begin{enumerate}
+
+\item Match
+
+\begin{lstlisting}
+string s = "23:59";
+regex r(R"(\d{2}:\d{2})");
+
+if (regex_match(s, r)) {
+    cout << "Valid format!";
+}
+\end{lstlisting}
+
+\item Search
+
+\begin{lstlisting}
+string s = "The error code is 404 and the id is 99";
+smatch res;
+regex e(R"(code is (\d+))");
+
+if (regex_search(s, res, e)) {
+    // res[0] is the whole match ("code is 404")
+    // res[1] is the first capture group ("404")
+    cout << "Extracted: " << res[1] << endl;
+}
+\end{lstlisting}
+
+\item Replace
+
+\begin{lstlisting}
+string s = "User_Name: John! @123";
+// Replace anything that is NOT a word character or space with ""
+string clean = regex_replace(s, regex(R"([^\w\s])"), "");
+// Output: "User_Name John 123"
+\end{lstlisting}
+
+\item Iterate
+
+\begin{lstlisting}
+string s = "Rooms 101, 202, and 305 are booked.";
+regex e(R"(\d+)");
+
+auto it_begin = sregex_iterator(s.begin(), s.end(), e);
+auto it_end = sregex_iterator();
+
+for (auto i = it_begin; i != it_end; ++i) {
+    smatch match = *i;
+    cout << "Found: " << match.str() << " at position " << match.position() << endl;
+}
+/*
+    Found: 101 at position 6
+    Found: 202 at position 11
+    Found: 305 at position 20
+*/
+\end{lstlisting}
+
+\item Common Pattern
+
+\begin{enumerate}
+    \item {Character Classes (The "What")}
+    \begin{lstlisting}
+.      : Wildcard : Matches any single character except newline.
+[abc]  : Character Set : Matches 'a', 'b', or 'c'.
+[^abc] : Negative Set : Matches any character except 'a', 'b', or 'c'.
+[a-z]  : Range : Matches any character from 'a' to 'z'.
+\d     : Digit : Matches [0-9].
+\D     : Non-digit : Matches anything except [0-9].
+\w     : Word Character : Matches [a-zA-Z0-9_] (alphanumeric + underscore).
+\W     : Non-word Character : Matches anything not in \w.
+\s     : Whitespace : Matches spaces, tabs, and line breaks.
+\S     : Non-whitespace : Matches anything that isn't a space.
+    \end{lstlisting}
+
+    \item {Quantifiers (The "How Many")}
+\begin{lstlisting}
+*        : 0 or more times.
++        : 1 or more times.
+?        : 0 or 1 time (makes the preceding character optional).
+{n}      : Exactly n times.
+{n,}     : n or more times.
+{n,m}    : Between n and m times.
+*? or +? : Non-greedy : Matches the smallest possible string instead of the largest.
+\end{lstlisting}
+
+    \item {Anchors \& Boundaries (The "Where")}
+
+\begin{lstlisting}
+^  : Start of string : Matches the beginning of the line/string.
+$  : End of string : Matches the end of the line/string.
+\b : Word Boundary : Matches the position between a word character and a non-word character.
+\B : Non-boundary : Matches a position that is not a word boundary.
+\end{lstlisting}
+
+    \item {Logic \& Groups}
+
+\begin{lstlisting}
+|       : Alternation : Logical OR (e.g., cat|dog matches either "cat" or "dog").
+
+(...)   : Capturing Group : Groups characters together and saves the match for extraction (e.g., res[1]).
+
+(?:...) : Non-capturing Group : Groups characters for quantifiers but does not save the match.
+
+\1, \2  : Backreference : Matches the exact same text that was previously matched by a specific group.    
+\end{lstlisting}
+
+\item {Escaping Special Characters}
+
+\begin{lstlisting}
+If you need to match a literal character used in regex syntax, you must escape it:
+\. : Literal period
+\\ : Literal backslash
+\+ : Literal plus
+\* : Literal asterisk
+\? : Literal question mark
+\( and \) : Literal parentheses
+\[ and \] : Literal brackets
+\end{lstlisting}
+
+\item Common CP Pattern Snippets
+
+\begin{lstlisting}
+Integer (Positive/Negative): R"(-?\d+)"
+Floating Point: R"(-?\d*\.?\d+)"
+Simple Word: R"(\w+)"
+Hexadecimal: R"(0x[0-9a-fA-F]+)"
+Everything between Quotes: R"(\".*?\")"
+Remove extra spaces: regex_replace(s, regex(R"(\s+)"), " ")
+    return 0;
+}    
+\end{lstlisting}
+
+\item Regex Example
+
+\begin{lstlisting}
+string s = "123123ABC_ABCADHD:456";
+smatch res;
+regex e(R"([a-zA-Z0-9\w]{4,8}_)");
+if(regex_search(s, res, e)){
+    cout << res.size() << '\n';
+    for(auto p : res) cout << p << '\n';
+}
+
+// Example 1: S is "PA"
+// Example 2: S is "PB"
+string s1 = "PA, PA, PAitfy, PA";
+string s2 = "SSSPB, PB, PBtify, PBSSS";
+
+// (\w+) captures the first word
+// \1 refers back to that exact captured word
+// anchor $ indicated it is must end
+// anchor ^ indicated it is must start with
+regex e(R"(^(\w+), \1, \1\w+, \1$)");
+smatch res;
+if (regex_search(s1, res, e)) {
+    cout << res[0] << " ";
+    cout << "In string 1, S is: " << res[1] << endl; // Output: PA
+}
+if (regex_search(s2, res, e)) {
+    cout << res[0] << " ";
+    cout << "In string 2, S is: " << res[1] << endl; // Output: PB (not printed)
+}
+\end{lstlisting}
+
 \end{enumerate}
 
 \end{enumerate}
